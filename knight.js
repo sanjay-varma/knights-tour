@@ -15,23 +15,21 @@ let count = 0;
 
 const board = new Array(m).fill(0).map(() => Array(n).fill(0));
 
-let moveTo = { row: 0, col: 0 }; // starting square
+let startAt = { row: 0, col: 0 }; // starting square
 if (process.argv.length > 4 && !isNaN(process.argv[4]) && !isNaN(process.argv[5])) {
     const row = parseInt(process.argv[4]);
     const col = parseInt(process.argv[5])
     if (row >= 0 && row <= (m - 1) && col >= 0 && col <= (n - 1))
-        moveTo = { row: row, col: col }
+        startAt = { row: row, col: col }
     else
         console.log(`invalid start square (${row}, ${col})`)
 }
-
-let depth = 1;
 
 const done = new AbortController();
 const sigDone = done.signal;
 
 console.time('Total');
-knight(board, moveTo, 1)
+knight(board, startAt, 1)
     .then((b) => {
         console.table(b)
         // console.log(JSON.stringify(b));
@@ -54,15 +52,16 @@ function knight(board, moveTo, moveNo) {
             const { row, col } = moveTo;
             board[row][col] = moveNo;
 
-            if (moveNo > depth) {
-                // console.log('Depth: ', moveNo);
-                // console.table(board);
-                depth = moveNo;
-            }
-
             if (moveNo === (m * n)) {
-                resolve(board);
-                done.abort();
+                if (!isNeighbour(moveTo, startAt)) {
+                    console.log('non reentrant solution');
+                    console.table(board);
+                    reject();
+                } else {
+                    console.log('reentrant solution');
+                    resolve(board);
+                    done.abort();
+                }
             }
 
             if (sigDone?.aborted === true) return;
@@ -100,7 +99,7 @@ function knight(board, moveTo, moveNo) {
             })
 
             if (tries.length === 0) {
-                console.log(`nothing left to try at move no: ${moveNo}`)
+                // console.log(`nothing left to try at move no: ${moveNo}`)
                 reject();
             }
 
@@ -110,7 +109,7 @@ function knight(board, moveTo, moveNo) {
             delete nextMoves;
 
             // use --expose_gc
-            if (global.gc && ++count > 50) { global.gc(); count = 0 }
+            if (global.gc && ++count > 200) { global.gc(); count = 0 }
 
             Promise.any(tries)
                 .then((b) => {
@@ -142,6 +141,13 @@ function findMoves(fromPos, board) {
     })
 
     return moves;
+}
+
+function isNeighbour(pos1, pos2) {
+    const n = knightMoves.filter((m) => {
+        return (pos1.row + m[0] === pos2.row && pos1.col + m[1] === pos2.col)
+    })
+    return n.length !== 0;
 }
 
 function clone2D(a) {
